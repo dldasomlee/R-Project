@@ -1,0 +1,315 @@
+#' @export
+#' @usage
+#'
+#*One thing to note is that Twitter API stroes and returns dates and times in GMT which means I need to convert time zone (-5hr) to get EST*
+library(httr)
+library(rtweet)
+library(twitteR)
+library(ROAuth)
+library(tidyr)
+library(streamR)
+library(RCurl)
+library(RJSONIO)
+library(stringr)
+library(dplyr)
+library(tm)
+library(ggplot2)
+library(zoo)
+library(tidytext)
+library(ggjoy)
+library(reshape)
+library(lubridate)
+
+#Below parts are for storing real-time tweets, so I'm going to leave them out
+#------------------------------------------------------------------------
+#Twitter Authentication process
+#options(httr_oauth_cache=T)
+#api_key <-Sys.getenv("TWITTER_KEY")
+#api_secret <- Sys.getenv("TWITTER_SECRET")
+#access_token <- Sys.getenv("TWITTER_ACCESS_TOKEN")
+#access_token_secret <- Sys.getenv("TWITTER_ACCESS_SECRET")
+#setup_twitter_oauth(api_key, api_secret, access_token, access_token_secret)
+
+#Prepare first dataset
+#1. Download the dataset from Twitter on 11/23. Approximately one full day.
+#Stream tweets that mention 'NYCTSubway', 'MTA', 'RidersNY'
+#Stream time in seconds so for one minute set timeout = 60
+#24hour
+#t <- 60L*60L*24L
+#MTA <- "NYCTSubway, MTA, RidersNY"
+#stream_tweets2(
+#  q = MTA,
+#  parse = FALSE,
+#  timeout = t,
+#  dir = "test-stream"
+#)
+#------------------------------------------------------------------------
+
+#2. Store the dataset and parse it
+#Parse from json file
+rt <- parse_stream("C:/Users/DaSom/Desktop/2017_Fall/MDS/Lee_DaSom/project/Final Project/ThanksgivingdayTwitter/data/test-stream.json")
+
+#Clean the first dataset
+#1. Get riders' tweets and retweets
+
+#Save the data table
+save(file = "rt.RDATA", rt)
+
+#Filter by the language 'en' and it returns all results with the country_code = 'US'
+#Country includes a few foreign countries and NA values
+#Note that there are some users who have locations outside of U.S. travelled to USA and tweeted about MTA
+#Include them
+rt1 <- filter(rt, lang == "en")
+#Subset the data by tweets and retweets
+tweet_data <- rt1[grep("RT ", rt1$text, invert=T),]
+retweet_data <- rt1[grep("RT ", rt1$text), ]
+
+#a) Get tweets frequency of riders' tweets 2017-11-23 06:38:06
+#Convert timezone from GMT to EST
+conv_time <- strptime((tweet_data$created_at), format ="%Y-%m-%d %H:%M:%S")
+#Function to add time
+hrs<-function(u){
+  x<-u*3600
+  return(x)
+}
+#Substract 5hrs to get EST
+tweet_data$conv_time<-conv_time-hrs(5)
+#Divide created_at by date and time
+tweet_data$conv_time <- as.character(tweet_data$conv_time)
+a.split <- strsplit(tweet_data$conv_time, split = " ")
+tmp <- do.call(rbind, a.split)
+tweet_data <- data.frame(tweet_data, tmp)
+#Change column names of X1, X2
+names(tweet_data)[names(tweet_data) == 'X1'] <- 'created_at_date'
+names(tweet_data)[names(tweet_data) == 'X2'] <- 'created_at_time'
+#Create a new column that shows the hour when the tweet is created
+tweet_data$hour <- as.numeric(substring(tweet_data$created_at_time, 1, 2))
+#Count the time range of hours
+#12AM-3AM
+tbl1 <- sum(tweet_data$Con_hour >= 0 & tweet_data$Conhour <=3)
+#4AM-7AM
+tbl2 <- sum(tweet_data$Conhour >= 4 & tweet_data$hour <=7)
+#8AM-11AM
+tbl3 <- sum(tweet_data$hour >= 8 & tweet_data$hour <=11)
+#12PM-3PM
+tbl4 <- sum(tweet_data$hour >= 12 & tweet_data$hour <=15)
+#4PM-7PM
+tbl5 <- sum(tweet_data$hour >= 16 & tweet_data$hour <=19)
+#8PM-11PM
+tbl6 <- sum(tweet_data$hour >= 20 & tweet_data$hour <=23)
+tbl <- c( tbl1, tbl2, tbl3, tbl4, tbl5, tbl6)
+#Draw a barplot
+barplot(tbl, col="Red", space = TRUE, main = "Riders Tweet Frequency by Time of Day", xlab="Time of Day", ylab="Frequency", names.arg=c('12AM-3AM', '4AM-7AM', '8AM-11AM', '12PM-3PM', '4PM-7PM', '8PM-11PM'))
+
+#Analysis: Riders tweeted the most during 8AM-11AM which is during the rush hours (Citation: http://web.mta.info/nyct/subway/howto_sub.htm). Second most tweeted time was during 12PM-3PM around lunch time. Considering the fact that 11/23 was a holiday, it is safe to assume that people used MTA often in the morning to travel and it led to more tweets about MTA compared to other time period within the same day.
+
+#b) Get tweets frequency of riders' retweets
+#Convert timezone from GMT to EST
+conv_time <- strptime((retweet_data$created_at), format ="%Y-%m-%d %H:%M:%S")
+#Substract 5hrs to get EST
+retweet_data$conv_time<-conv_time-hrs(5)
+#Divide created_at by date and time
+retweet_data$conv_time <- as.character(retweet_data$conv_time)
+a.split_ <- strsplit(retweet_data$conv_time, split = " ")
+tmp_ <- do.call(rbind, a.split_)
+retweet_data <- data.frame(retweet_data, tmp_)
+#Change column names of X1, X2
+names(retweet_data)[names(retweet_data) == 'X1'] <- 'created_at_date'
+names(retweet_data)[names(retweet_data) == 'X2'] <- 'created_at_time'
+#Create a new column that shows the hour when the tweet is created
+retweet_data$hour <- as.numeric(substring(retweet_data$created_at_time, 1, 2))
+#Count the time range of hours
+#12AM-3AM
+tbl1_ <- sum(retweet_data$hour >= 0 & retweet_data$hour <=3)
+#4AM-7AM
+tbl2_ <- sum(retweet_data$hour >= 4 & retweet_data$hour <=7)
+#8AM-11AM
+tbl3_ <- sum(retweet_data$hour >= 8 & retweet_data$hour <=11)
+#12PM-3PM
+tbl4_ <- sum(retweet_data$hour >= 12 & retweet_data$hour <=15)
+#4PM-7PM
+tbl5_ <- sum(retweet_data$hour >= 16 & retweet_data$hour <=19)
+#8PM-11PM
+tbl6_ <- sum(retweet_data$hour >= 20 & retweet_data$hour <=23)
+tbl_ <- c( tbl1_, tbl2_, tbl3_, tbl4_, tbl5_, tbl6_)
+#Draw a barplot
+barplot(tbl_, col="Red", space = TRUE, main = "Riders Retweet Frequency by Time of Day", xlab="Time of Day", ylab="Frequency", names.arg=c('12AM-3AM', '4AM-7AM', '8AM-11AM', '12PM-3PM', '4PM-7PM', '8PM-11PM'))
+
+
+#Analysis: This graph looks similar to the previous graph except that there were many rewteets in the early morning. Overall, this result confirms the previous analysis that riders tweeted very frequently in the morning. Let's take a look at MTA's tweets to see the reason behind this.
+
+#Prepare second dataset
+#Warning!
+#Get NYCTSubway's tweets on its timeline and replies
+#Note, the number ('n') should be dependent on the time that the person stores the data from Twitter
+#For example, if the person stores tweets close to the set time, n should be small
+#Extracing a user's twitter Timeline has the 3.2k limit
+#I stored the dataset in the evening of 11/23, so I put a fairly small amount of tweets to query
+#Below is the code to get tweets for your reference
+#------------------------------------------------
+#test <- get_timeline("NYCTSubway", n = 90)
+#save(file = "mta.RDATA", mta)
+#------------------------------------------------
+#Please noete that I will be using the data in csv
+#It was supposed to be RDATA format. Unfortunately, I lost codes and left with the data table only
+#But most codes should return the same outputs except when it needs to convert time zone
+
+#1. Query and store the dataset from Twitter on 11/23. Approximately one full day amount of tweets.
+#Open csv file
+mta <- read.csv(file ="C:/Users/DaSom/Desktop/2017_Fall/MDS/Lee_DaSom/project/Final Project/ThanksgivingdayTwitter/data/mta.csv", header =TRUE, sep=",")
+
+#Clean the second dataset
+#1. Get MTA' tweets on its timeline and replies
+#Divide created_at by date and time
+mta$created_at <- as.character(mta$created_at)
+a.split_mta <- strsplit(mta$created_at, split = " ")
+tmp_mta <- do.call(rbind, a.split_mta)
+mta <- data.frame(mta, tmp_mta)
+#Change column names of X1, X2
+names(mta)[names(mta) == 'X1'] <- 'created_at_date'
+names(mta)[names(mta) == 'X2'] <- 'created_at_time'
+#Pad 0 in front of time that doesn't have the format of xx:xx
+mta$created_at_time <- as.character(mta$created_at_time)
+mta$created_at_time <- str_pad(mta$created_at_time, 5, pad = "0")
+#Combine the date and time
+mta$com_created_at <- paste(mta$created_at_date, mta$created_at_time)
+#------------------------------------------------------------------
+#For CSV file
+#Convert timezone from GMT to EST
+mta$com_created_at <- as.POSIXct(as.character(mta$com_created_at), format = "%m/%d/%Y %H:%M")
+#Substract 5hrs to get EST
+mta$conv_time<-mta$com_created_at - hrs(5)
+#------------------------------------------------------------------
+#For RDATA file
+#Convert timezone from GMT to EST
+#Format depends on the date
+#conv_time <- strptime((mta$com_created_at), format ="%Y-%m-%d %H:%M:%S")
+#Substract 5hrs to get EST
+#mta$conv_time<-conv_time-hrs(5)
+#------------------------------------------------------------------
+#Divide conv_time and extract conv_created_at_time
+mta$temporary <- as.character(mta$conv_time)
+temporary2 <- strsplit(mta$temporary, split = " ")
+temporary3 <- do.call(rbind, temporary2)
+mta <- data.frame(mta, temporary3)
+#Change column names of X1, X2'
+names(mta)[names(mta) == 'X2'] <- 'conv_created_at_time'
+#Create a new column that shows the hour when the tweet is created
+mta$hour <- as.numeric(substring(mta$conv_created_at_time, 1, 2))
+#Count the time range of hours
+#12AM-3AM
+tbl1_mta <- sum(mta$hour >= 0 & mta$hour <=3)
+#4AM-7AM
+tbl2_mta <- sum(mta$hour >= 4 & mta$hour <=7)
+#8AM-11AM
+tbl3_mta <- sum(mta$hour >= 8 & mta$hour <=11)
+#12PM-3PM
+tbl4_mta <- sum(mta$hour >= 12 & mta$hour <=15)
+#4PM-7PM
+tbl5_mta <- sum(mta$hour >= 16 & mta$hour <=19)
+#8PM-11PM
+tbl6_mta <- sum(mta$hour >= 20 & mta$hour <=23)
+tbl_mta <- c( tbl1_mta, tbl2_mta, tbl3_mta, tbl4_mta, tbl5_mta, tbl6_mta)
+#Draw a barplot
+barplot(tbl_mta, col="Red", space = TRUE, main = "MTA Tweet Frequency by Time of Day", xlab="Time of Day", ylab="Frequency", names.arg=c('12AM-3AM', '4AM-7AM', '8AM-11AM', '12PM-3PM', '4PM-7PM', '8PM-11PM'))
+
+#Analysis: MTA tweeted most actively during the evening. Looking at tweets, MTA mostly tweeted about service information at Thanksgiving holiday (http://web.mta.info/nyct/service/stationInfo_Thanksgiving_Nov2017.htm), a link to file complaints, and updates on current schedules.
+
+##Response rate of MTA during the holiday
+#Count the number of tweet mentioning @NYCTSubway by using mentions_screen_name
+#Not counting @MTA because its account is dead
+a <- filter(tweet_data, tweet_data$mentions_screen_name == "NYCTSubway")
+#Select a subset of dataset to later combine with MTA data and compare them both
+a1 <- a%>%select(created_at, screen_name, text, hour)
+#Count the number of MTA's replies by using mentions_screen_name
+#Remove rows that include NA for mentions_screen_name so that I can select only replies
+b <- mta[complete.cases(mta$mentions_screen_name),]
+#Select a suset of dataset to later combine with riders data and compare them both
+b1 <- b%>%select(created_at, reply_to_screen_name, text, hour)
+#Put them side by side to see how many tweets MTA had responded by using screen_name and reply_to_screen_name
+c <- merge(a1, b1, by.x="screen_name", by.y="reply_to_screen_name")
+#Present the table in chronological order
+c <- arrange(c, created_at.x, created_at.y)
+#Rename columns
+names(c)[names(c) == 'created_at.x'] <- 'Riders_created_at'
+names(c)[names(c) == 'created_at.y'] <- 'MTA_created_at'
+names(c)[names(c) == 'text.x'] <- 'Riders_text'
+names(c)[names(c) == 'text.y'] <- 'MTA_text'
+names(c)[names(c) == 'hour.x'] <- 'Riders_hour'
+names(c)[names(c) == 'hour.y'] <- 'MTA_hour'
+#Find the number of users that MTA responded to
+length(unique(c$screen_name))
+
+#Analysis: Though there were some time that did not overlap bewteen time range of 'tweet_data' data and its 'mta' data, out of 109 riders' tweets to @NYCTSubway, MTA responded to approximately 60 tweets. In other words, 33 users received responses from MTA.
+
+#Calculate the response rate
+#Linear regression model
+model <- lm(Riders_hour~MTA_hour, c)
+#Summary of the relationship
+relation <-lm(Riders_hour~MTA_hour, c)
+print(summary(relation))
+ggplot(c)+aes(x=Riders_hour, y=MTA_hour)+geom_point()+geom_abline(intercept=5.6976, slope=0.6631, color='deeppink')
+
+#Analysis: As the summary and table both explain, we can see that the fitted line is pretty close to the data points.
+#In other words, there is a good correlation that confirms that MTA was responsive to riders' tweets during Thanksgiving holiday.
+
+#Evaluate riders' reactions to MTA's tweets
+#Collect MTA's tweets that are from the timeline. So exclude replies
+mtaorig<-mta[is.na(mta$mentions_screen_name),]
+#Choose the subset of the data table
+mtaorig1<-mtaorig%>%select(hour)
+#Make a data table with hours and their frequency
+w=table(mtaorig1$hour)
+t=as.data.frame(w)
+#Fill in 0~24 for Var1 and for missing values, fill in 0
+fillVar1<-data.frame(Var1=0:24)
+ttotal<-merge(fillVar1, t, all=TRUE)
+ttotal[is.na(ttotal)]<-0
+#Select the subset of the data table
+b2 <-b1%>%select(hour)
+names(b2)[names(b2) == 'Riders_hour'] <- 'hour'
+#Mke a data table with hours and their frequency
+w1=table(b2$hour)
+t_=as.data.frame(w1)
+#Fill in 0~24 for Var1 and for missing values, fill in 0
+fillVar1_<-data.frame(Var1=0:24)
+ttotal_<-merge(fillVar1_, t_, all=TRUE)
+ttotal_[is.na(ttotal_)]<-0
+#Combine two tables into one
+ttt<-merge(ttotal, ttotal_, by="Var1")
+#Rename columns
+names(ttt)[names(ttt) == 'Freq.x'] <- 'Numb_MTA_tweet'
+names(ttt)[names(ttt) == 'Freq.y'] <- 'Numb_Riders_tweet'
+names(ttt)[names(ttt) == 'Var1'] <- 'Hour'
+#Draw a graph
+ggplot(ttt, aes(x=Hour))+geom_line(aes(y=Numb_MTA_tweet), color="grey")+geom_line(aes(y=Numb_Riders_tweet), color="blue")+ylab(label="Frequency")+xlab("Hours during Thanksgiving Day")
+
+#Analysis: Above chart shows the frequency of MTA tweets in grey line and the frequency of riders' tweets in blue line for every hour. Though it's not accurate, it is noticable that riders tweeted frequnelty when MTA tweeted frequnetly approximately during 6PM to 10PM, which shows that more MTA tweeted, more riders tweeted. Thus, it confirms the hypothesis.
+
+#Sentiment analysis of riders' tweets to @NYCTSubway
+#I used codes from Edgar's Data Lab (https://www.edgarsdatalab.com/2017/09/04/sentiment-analysis-using-tidytext/)
+#Unnest_tokens() command from the tidytext transforms the exisitng tidy table with one row (observation) per tweet to a table with one row (token) per word inside the tweet
+tweet_words <- tweet_data%>%select(status_id, screen_name, text, created_at_date, created_at_time, hour)%>% unnest_tokens(word,text)
+#Discard stop wrods that contain common words
+#In addition, make a customized smal stop words
+my_stop_words <- tibble(word=c("https", "t.co", "rt", "amp", "rstats", "gt"), lexicon="twitter")
+#Combine tidytext's common words and my_stop_words to remove common words in the tweets
+#Additional filter is added to remove words that are numbers
+all_stop_words<-stop_words%>%bind_rows(my_stop_words)
+suppressWarnings({no_numbers<-tweet_words%>%filter(is.na(as.numeric(word)))})
+no_stop_words<-no_numbers%>%anti_join(all_stop_words, by="word")
+tibble(total_words = nrow(tweet_words), after_cleanup=nrow(no_stop_words))
+
+#Analysis: Above table shows that more than half of the words in the riders' tweets are considered stop words.
+
+#Sentiment matching
+#Use the NRC lexicon to do analysis and get_sentiments() fuctions in tidytext to match words against different vocabs
+nrc_words<-no_stop_words%>%inner_join(get_sentiments("nrc"), by="word")
+nrc_words
+
+#analysis: This table shows the sentiment of each tweet by each user.
+
+#The number of each sentiment
+nrc_words%>%group_by(sentiment)%>%tally%>%arrange(desc(n))
+
+#Analysis: Overall, there were more positive than negative riders tweets. Top three sentiments are positive, joy, and anticipation.

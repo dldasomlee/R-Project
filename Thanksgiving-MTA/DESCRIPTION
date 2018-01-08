@@ -1,0 +1,38 @@
+Package: ThanksgivingdayTwitter
+Type: Package
+Title: Twitter Analysis on Thanksgiving Day
+Version: 0.1.0
+Authors@R: person("Da Som", "Lee", email = "dl3153@columbia.edu", role = c("aut", "cre"))
+Description: Goal of this project is to analyze Tweets from riders and MTA (@NYCTSubway) during Thansgiving day (11/23/2017) and show that more MTA tweets, more riders tweet and vice version. This can be further extended to explain that Twitter is a reliable soruce that users go to get service information and MTA also uses its account to increase communication with riders, raise awareness, and etc.
+    Plans:
+    - Look at tweets fequency of 
+    	1) MTA's tweets which include timeline tweets and replies to riders
+    	2) Riders' tweets mentioning MTA 
+    	3) Riders' retweets from MTA
+    - MTA's response rates to riders' tweets mentioning MTA
+    - Riders' reactions to MTA's timeline tweets
+    - Sentiment analysis of riders' tweets mentioning MTA
+License: MIT + file LICENSE
+Imports: httr,
+    rtweet,
+    twitteR,
+    ROAuth,
+    tidyr,
+    streamR,
+    RCurl,
+    RJSONIO,
+    stringr,
+    dplyr,
+    tm,
+    ggplot2,
+    zoo,
+    tidytext,
+    ggjoy,
+    reshape,
+    lubridate   
+Encoding: UTF-8
+LazyData: true
+RoxygenNote: 6.0.1
+Suggests: knitr,
+    rmarkdown
+VignetteBuilder: knitr
